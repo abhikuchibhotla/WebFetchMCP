@@ -1,16 +1,22 @@
-# Google Context MCP
+# WebFetchMCP
 
-A free, stateless MCP server for local-model harnesses such as Codex and Claude Code. It can search the web, follow a relevant public link, extract readable page text, and return it as temporary tool context.
+WebFetchMCP is a lightweight, harness-agnostic Model Context Protocol (MCP) server designed specifically for coding agents and local LLMs. It empowers models (like Qwen Coder, Llama, Claude, etc.) to search the web for documentation, forums, and technical articles without requiring native web-search support in the host application.
 
-It does **not** cache search results, write web pages to disk, use a database, or retain a browsing history. It holds only the current tool call’s results in memory, then releases them. Search providers and pages you visit will still receive the corresponding network request, as they normally would.
+It prioritizes **token efficiency** and **code preservation**. It does **not** crawl recursively, write cached HTML to disk, or fill your machine with vector databases. It is a stateless bridge designed to pull in web context cleanly and efficiently.
 
-## What it exposes
+## Core Features
 
-- `search_web` — ranked titles, links, and snippets from the configured search provider.
-- `read_webpage` — cleaned text from one public HTML or plain-text page.
-- `search_and_read` — searches and reads the top ranked pages in one call.
+- **Harness-Agnostic**: Works with any standard MCP client (Claude Code, OpenCode, Cline, Goose, etc.).
+- **Token-Efficient**: Uses `turndown` and code-density heuristics to strip navigation, footers, and noise, converting HTML into clean GitHub Flavored Markdown (GFM).
+- **Code Preservation**: Explicitly preserves `<code>` and `<pre>` tags so technical signatures and code snippets survive the transition to Markdown.
+- **In-Memory Caching**: Uses a short-lived LRU cache (15 min) to prevent redundant network fetches if an agent queries the same URL multiple times during a coding session.
+- **Documentation Scoping**: Includes a specialized `docs_search` tool that automatically targets official documentation domains (e.g., searching `library="react"` scopes to `react.dev`).
 
-Fetched text is explicitly labelled as untrusted reference material so an agent should treat page instructions as content, not commands.
+## Tools Exposed
+
+- `web_search(query, ...)`: Returns ranked titles, links, and snippets from the configured search provider.
+- `docs_search(query, library, ...)`: Similar to `web_search`, but appends domain scoping filters (e.g., `site:docs.python.org`) based on the requested library ecosystem.
+- `web_fetch(url, ...)`: Fetches a single public webpage, strips the bloat, and returns token-efficient Markdown.
 
 ## Setup
 
@@ -21,79 +27,28 @@ Fetched text is explicitly labelled as untrusted reference material so an agent 
    npm run build
    ```
 
-2. Choose a search provider. Copy `.env.example` to a private environment file if helpful, but do not commit it.
+2. Configure a Search Provider (Default is DuckDuckGo HTML). 
+   Set the provider via the `SEARCH_PROVIDER` environment variable (e.g., `duckduckgo-html`, `serper`, `google-cse`).
 
-   ### Free default: DuckDuckGo HTML results
+3. Add it to your harness configuration. 
 
-   No account or key is needed:
-
+   **Example: Claude Code configuration**
    ```sh
-   SEARCH_PROVIDER=duckduckgo-html
+   claude mcp add webfetch-mcp --scope user \
+     -- node /absolute/path/to/searchMCP/dist/index.js
    ```
 
-   This is the default. It needs no account, key, database, cache, or paid service. It is a web search provider, not Google.
+## Architecture & Safety Limits
 
-   ### Google results
-
-   Google has no reliable, official free web-search API available to new users. The server includes an experimental no-key `SEARCH_PROVIDER=google-html` mode, but Google commonly returns a JavaScript-only page or a CAPTCHA to automated clients, so it cannot be recommended for dependable use. The key-backed alternatives below are the reliable choices if you strictly need Google’s ranking.
-
-   ### Optional: Serper (Google results)
-
-   Serper is a Google-results API. Add:
-
-   ```sh
-   SEARCH_PROVIDER=serper
-   SERPER_API_KEY=your_key
-   ```
-
-   ### Legacy: Google Programmable Search JSON API
-
-   ```sh
-   SEARCH_PROVIDER=google-cse
-   GOOGLE_API_KEY=your_key
-   GOOGLE_CSE_ID=your_search_engine_id
-   ```
-
-   Google’s Programmable Search JSON API is closed to new customers and Google says existing customers must transition by January 1, 2027. Use it only if you already have access. See Google’s [official API overview](https://developers.google.com/custom-search/v1/overview).
-
-3. Add it to your harness configuration. Keep secrets in the harness environment, not in this repository.
-
-## Codex configuration
-
-Put this in `~/.codex/config.toml` (adjust the absolute path if you move this project):
-
-```toml
-[mcp_servers.google_context]
-command = "node"
-args = ["/Users/abhishekkuchibhotla/Projects/searchMCP/dist/index.js"]
-```
-
-Restart Codex after editing the configuration.
-
-## Claude Code configuration
-
-From this project directory:
-
-```sh
-claude mcp add google-context --scope user \
-  -- node /Users/abhishekkuchibhotla/Projects/searchMCP/dist/index.js
-```
-
-Use the equivalent `-e GOOGLE_API_KEY=... -e GOOGLE_CSE_ID=...` variables if you are an existing Google CSE customer.
-
-## Safety limits
-
-- Only public `http` and `https` pages are fetched.
-- Localhost, private network ranges, credentials in URLs, and nonstandard ports are blocked. Redirect targets are checked too.
-- `WEB_ALLOWLIST` and `WEB_BLOCKLIST` can further restrict fetches, for example `WEB_ALLOWLIST=docs.python.org,*.wikipedia.org`.
-- Individual page responses are limited to 2 MB, 15 seconds, and 15,000 returned characters by default. `search_and_read` fetches pages one at a time to keep peak memory low. Set `MAX_PAGE_CHARS` or `FETCH_TIMEOUT_MS` to tune within the documented bounds.
-- HTML and plain-text pages are supported. JavaScript-rendered sites and PDFs are intentionally not fetched as local files.
+- Fetched text is explicitly labelled as untrusted reference material.
+- Only public `http` and `https` pages are fetched (local/private IPs are blocked).
+- `WEB_ALLOWLIST` and `WEB_BLOCKLIST` can restrict domains.
+- Responses are capped at 2MB raw size and the returned Markdown is truncated to prevent overflowing local LLM context windows.
 
 ## Development
 
 ```sh
 npm run dev
 npm run check
+npm run build
 ```
-
-The server uses stdio. It writes only operational logs to stderr, leaving stdout exclusively for the MCP protocol.
