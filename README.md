@@ -18,25 +18,40 @@ It prioritizes **token efficiency** and **code preservation**. It does **not** c
 - `docs_search(query, library, ...)`: Similar to `web_search`, but appends domain scoping filters (e.g., `site:docs.python.org`) based on the requested library ecosystem.
 - `web_fetch(url, ...)`: Fetches a single public webpage, strips the bloat, and returns token-efficient Markdown.
 
-## Setup
+## Setup & Easy Installation
 
-1. Install dependencies and compile:
+### Option 1: Quick Install (Local via npx / npm link)
 
+If you just want to run it quickly on your machine without pushing to a registry:
+
+1. Clone this repository to your machine.
+2. Run the quick build command:
    ```sh
-   npm install
-   npm run build
+   npm install && npm run build
+   ```
+3. Link it globally to your machine so it's easy to access:
+   ```sh
+   npm link
+   ```
+4. Now you can attach it to your harness using the global command:
+   
+   **Claude Code Example:**
+   ```sh
+   claude mcp add webfetch-mcp --scope user -- webfetch-mcp
    ```
 
-2. Configure a Search Provider (Default is DuckDuckGo HTML). 
-   Set the provider via the `SEARCH_PROVIDER` environment variable (e.g., `duckduckgo-html`, `serper`, `google-cse`).
+### Option 2: Run directly from GitHub via npx (Once Published)
 
-3. Add it to your harness configuration. 
+Once you push this to your GitHub repository, anyone can install and run it without cloning by using `npx`:
 
-   **Example: Claude Code configuration**
-   ```sh
-   claude mcp add webfetch-mcp --scope user \
-     -- node /absolute/path/to/searchMCP/dist/index.js
-   ```
+```sh
+claude mcp add webfetch-mcp --scope user -- npx -y github:your-username/webfetch-mcp
+```
+
+## Configuration (Optional)
+
+By default, the server uses DuckDuckGo HTML for free, no-key searches. 
+If you want to use Google or Serper, set the `SEARCH_PROVIDER` and `SERPER_API_KEY` (or `GOOGLE_API_KEY`) environment variables in your harness configuration.
 
 ## Architecture & Safety Limits
 
