@@ -91,3 +91,11 @@ WEB_BLOCKLIST=example.com
 npm run check
 npm run build
 ```
+
+## How it works
+
+When your local model needs current information, it calls `web_search` or `search_and_read` with a question. The MCP server opens a normal public search-results page—starting with DuckDuckGo, then Bing, then Google—and extracts only the titles, links, and short snippets. It does not call a search API.
+
+For a useful result, the model picks a link and calls `web_fetch`, or uses `search_and_read` to read a few top links automatically. The server checks that every URL and redirect is public, downloads the page into memory, removes common page clutter, turns the readable part into compact text, returns that text to the model, and then discards it. It never writes searched pages or queries to disk and does not keep a page cache.
+
+If a search site shows a CAPTCHA, blocks automation, or returns a JavaScript-only page, that site is recorded as unavailable and the server tries the next search site once. It never repeatedly retries a blocked site. If none of the configured sites work, it returns a `needs_research_handoff` result. The harness should ask you for public URLs, or you can obtain URLs from an online-enabled researcher and provide them. The model then calls `read_urls` to understand those sources without needing a search API.
