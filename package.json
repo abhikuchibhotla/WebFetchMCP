@@ -1,11 +1,11 @@
 {
-  "name": "webfetch-mcp",
+  "name": "research-context-mcp",
   "version": "0.1.0",
   "private": true,
-  "description": "A stateless MCP server that searches the web and returns readable, token-efficient web-page context for local LLMs.",
+  "description": "A no-API, stateless MCP server that searches public result pages and reads web context for local LLMs.",
   "type": "module",
   "bin": {
-    "webfetch-mcp": "dist/index.js"
+    "research-context-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && chmod +x dist/index.js",

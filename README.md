@@ -1,67 +1,93 @@
-# WebFetchMCP
+# Research Context MCP
 
-WebFetchMCP is a lightweight plugin (an MCP server) that gives local AI models and coding assistants the ability to **search the web and read documentation**.
+An MCP server for local models in Claude Code or Codex. It searches normal public search-result pages, reads relevant public pages as clean text, and gives that temporary context to the model.
 
-Instead of your AI saying *"I don't have access to the internet,"* it can now search DuckDuckGo, fetch the official documentation you ask for, and read it to write better code for you.
+It uses **no search APIs, API keys, databases, disk cache, or memory cache**. The only retained data is the current tool call in process memory; it is discarded when that call finishes.
 
-## Quickstart: Try It Out Now
+## How it avoids CAPTCHA loops
 
-If you have downloaded this code to your computer, you can install and use it in less than 30 seconds.
+The default search order is DuckDuckGo HTML, Bing HTML, then Google HTML. Each site is tried once only. If one shows a CAPTCHA, JavaScript-only page, rate limit, or other block, the server moves to the next site. It never retries a blocked site.
 
-**1. Build the tool:**
-Open your terminal in this folder and run:
+If all sites fail, the tool returns a `needs_research_handoff` response. Claude Code or Codex should then ask you to either:
+
+1. provide one to five public source URLs, or
+2. use an online-enabled model to research the topic and paste its source URLs.
+
+The model can call `read_urls` to read and understand those links. The server itself never contacts an online model.
+
+## Tools
+
+- `web_search` — searches normal result pages and returns ranked links/snippets.
+- `docs_search` — searches for a library’s likely official documentation.
+- `web_fetch` — reads one public HTML or text URL.
+- `read_urls` — reads one to five supplied URLs sequentially.
+- `search_and_read` — searches and reads the highest-ranked sources sequentially.
+
+Fetched text is marked as untrusted reference material so the harness should treat page instructions as data, not commands.
+
+## Install
+
+Requires Node.js 20 or newer.
+
 ```sh
 npm install
 npm run build
-npm link
-```
-*(This installs the tool globally on your computer so your AI can find it).*
-
-**2. Attach it to your AI (Claude Code Example):**
-```sh
-claude mcp add webfetch-mcp --scope user -- webfetch-mcp
 ```
 
-**3. Test it out!**
-Open Claude Code (or your chosen AI harness) and ask it:
-> *"Can you search the web for 'Node.js MCP tutorial' and summarize the top 3 results?"*
-or
-> *"Can you fetch this URL and tell me what the latest syntax is? https://react.dev/reference/react/useEffect"*
+### Claude Code
 
----
-
-## How It Works
-
-This tool was built specifically for **Local AI Models** (like Qwen, Llama, etc.). Because local models have smaller memory windows (context limits) than massive cloud models, standard web scrapers often crash them by feeding them thousands of lines of useless HTML menus and footers.
-
-**WebFetchMCP solves this by:**
-1. **Fetching the page:** It grabs the raw website data.
-2. **Stripping the junk:** It throws away navigation bars, footers, sidebars, and ads.
-3. **Preserving the code:** It explicitly protects `<pre>` and `<code>` blocks so you don't lose formatting.
-4. **Converting to Markdown:** It turns the remaining text into lightweight Markdown and hands it to the AI.
-
-It is **100% Stateless**. It does not download junk files to your SSD, and it uses a smart 15-minute in-memory cache so if your AI asks for the exact same page twice, it loads instantly without re-downloading it.
-
----
-
-## What can the AI do with this?
-
-When you connect WebFetchMCP, your AI gets three new invisible tools:
-- `web_search`: The AI can Google/DuckDuckGo things on its own.
-- `web_fetch`: If you paste a URL in the chat, the AI can read it.
-- `docs_search`: The AI can search for specific library docs (e.g., searching specifically inside `react.dev`).
-
----
-
-## Installing on Another Machine
-
-If you host this repository privately on GitHub and want to install it on a second computer (like a VPS or remote laptop), you don't even need to clone it. Just run this command on the new machine:
+Install it under the name `research-context-mcp`:
 
 ```sh
-# Replace 'your-username' with your actual GitHub username
-npm install -g git+ssh://git@github.com/your-username/webfetch-mcp.git
+claude mcp add research-context-mcp --scope user -- node /Users/abhishekkuchibhotla/Projects/searchMCP/dist/index.js
 ```
-Then attach it to Claude Code as normal:
+
+### Codex
+
+Add this to your Codex MCP configuration:
+
+```toml
+[mcp_servers.research_context]
+command = "node"
+args = ["/Users/abhishekkuchibhotla/Projects/searchMCP/dist/index.js"]
+```
+
+Restart the harness after changing its MCP configuration.
+
+## Configuration
+
+The default ordered search sites are already suitable for light use:
+
 ```sh
-claude mcp add webfetch-mcp --scope user -- webfetch-mcp
+SEARCH_SITES=duckduckgo-html,bing-html,google-html
+```
+
+You can omit a source or change the order. These values are site-page readers, not APIs:
+
+```sh
+SEARCH_SITES=duckduckgo-html,bing-html
+```
+
+The optional limits below are conservative for laptops and a DGX Spark:
+
+```sh
+MAX_PAGE_CHARS=15000
+FETCH_TIMEOUT_MS=15000
+WEB_ALLOWLIST=docs.python.org,react.dev
+WEB_BLOCKLIST=example.com
+```
+
+## Safety and resource limits
+
+- Public HTTP/HTTPS pages only; private networks, localhost, URL credentials, and nonstandard ports are blocked.
+- Every redirect is checked against the same policy.
+- Search pages are capped at 1 MB; fetched pages at 2 MB, 15 seconds, and 15,000 returned characters by default.
+- `read_urls` and `search_and_read` fetch pages one at a time, keeping peak memory low.
+- HTML and plain-text pages are supported. JavaScript-rendered sites and PDFs are intentionally skipped.
+
+## Development checks
+
+```sh
+npm run check
+npm run build
 ```
