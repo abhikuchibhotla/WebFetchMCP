@@ -15,18 +15,14 @@ function listFromEnv(name: string): string[] {
     .filter(Boolean);
 }
 
-function providersFromEnv(): string[] {
-  const configured = listFromEnv("SEARCH_PROVIDERS");
+function searchSitesFromEnv(): string[] {
+  const configured = listFromEnv("SEARCH_SITES");
   if (configured.length > 0) return configured;
-  return [(process.env.SEARCH_PROVIDER ?? "duckduckgo-html").toLowerCase()];
+  return ["duckduckgo-html", "bing-html", "google-html"];
 }
 
 export const config = {
-  providers: providersFromEnv(),
-  searxngUrl: process.env.SEARXNG_URL?.replace(/\/$/, ""),
-  serperApiKey: process.env.SERPER_API_KEY,
-  googleApiKey: process.env.GOOGLE_API_KEY,
-  googleCseId: process.env.GOOGLE_CSE_ID,
+  searchSites: searchSitesFromEnv(),
   allowlist: listFromEnv("WEB_ALLOWLIST"),
   blocklist: listFromEnv("WEB_BLOCKLIST"),
   maxPageChars: integerFromEnv("MAX_PAGE_CHARS", DEFAULT_MAX_PAGE_CHARS, 1_000, 100_000),

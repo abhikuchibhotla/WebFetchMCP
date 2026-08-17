@@ -20,8 +20,6 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.25.2",
     "cheerio": "^1.1.2",
-    "domhandler": "^5.0.3",
-    "lru-cache": "^11.5.2",
     "turndown": "^7.2.4",
     "zod": "^3.25.76"
   },

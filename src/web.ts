@@ -1,11 +1,10 @@
 import { lookup } from "node:dns/promises";
 import net from "node:net";
 import TurndownService from "turndown";
-import { LRUCache } from "lru-cache";
 import { config } from "./config.js";
 
-const cache = new LRUCache<string, { url: string; title: string; text: string; contentType: string }>({ max: 50, ttl: 900_000 });
 const LOCAL_HOSTS = new Set(["localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback"]);
+export type WebPage = { url: string; title: string; text: string; contentType: string; truncated: boolean };
 
 function isPrivate(ip: string): boolean {
   if (net.isIPv4(ip)) return /^(0|10|127|169\.254|172\.(1[6-9]|2[0-9]|3[0-1])|192\.168|22[4-9]|2[3-5][0-9])\./.test(ip);
@@ -37,12 +36,8 @@ async function fetchBody(res: Response): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8");
 }
 
-export async function readWebPage(rawUrl: string, maxChars = config.maxPageChars) {
+export async function readWebPage(rawUrl: string, maxChars = config.maxPageChars): Promise<WebPage> {
   let url = await validateUrl(rawUrl);
-  if (cache.has(url.href)) {
-    const c = cache.get(url.href)!;
-    return { ...c, text: c.text.slice(0, maxChars), truncated: c.text.length > maxChars };
-  }
 
   let res: Response | undefined;
   for (let i = 0; i < 5; i++) {
@@ -72,6 +67,5 @@ export async function readWebPage(rawUrl: string, maxChars = config.maxPageChars
   if (!text) throw new Error("No readable text found.");
 
   const page = { url: url.href, title, text, contentType: type };
-  cache.set(url.href, page);
   return { ...page, text: text.slice(0, maxChars), truncated: text.length > maxChars };
 }
