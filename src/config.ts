@@ -15,8 +15,15 @@ function listFromEnv(name: string): string[] {
     .filter(Boolean);
 }
 
+function providersFromEnv(): string[] {
+  const configured = listFromEnv("SEARCH_PROVIDERS");
+  if (configured.length > 0) return configured;
+  return [(process.env.SEARCH_PROVIDER ?? "duckduckgo-html").toLowerCase()];
+}
+
 export const config = {
-  provider: (process.env.SEARCH_PROVIDER ?? "duckduckgo-html").toLowerCase(),
+  providers: providersFromEnv(),
+  searxngUrl: process.env.SEARXNG_URL?.replace(/\/$/, ""),
   serperApiKey: process.env.SERPER_API_KEY,
   googleApiKey: process.env.GOOGLE_API_KEY,
   googleCseId: process.env.GOOGLE_CSE_ID,
