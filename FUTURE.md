@@ -37,7 +37,22 @@ The current server already provides a solid V1/V2 foundation:
 
 ## Highest-priority V2 additions
 
-### 1. A single `research` tool
+### 1. Automatic research decision — next behavior to build
+
+The next behavior should be: the harness decides whether current external information is needed and uses this MCP automatically, without the user having to explicitly say “search the web.”
+
+Suggested decision rules:
+
+- Search when the answer depends on current facts, releases, documentation, prices, laws, schedules, news, product behavior, or a source the model cannot verify from local files.
+- Search when the model is uncertain about a factual claim and a source would materially improve the answer.
+- Do not search for ordinary code edits, local repository questions, writing requests, maths, or stable concepts that the model can answer confidently.
+- Prefer `search_and_read` for a question that needs evidence; use `web_search` only when choosing sources is the actual task.
+- After using web content, show a `Sources` section containing the links actually read.
+- If search fails, return the existing handoff and ask the user for URLs rather than repeatedly retrying.
+
+Implementation note: an MCP server cannot independently start itself. The automatic decision belongs in the harness instructions or a high-level `research` tool description, which tells Codex/Claude/Qwen when to invoke the MCP.
+
+### 2. A single `research` tool
 
 Add one high-level tool that performs the reliable default workflow:
 
@@ -69,7 +84,7 @@ Suggested output:
 
 Why it matters: local models are less reliable when they must coordinate several tools themselves. A single research tool makes the successful path easier.
 
-### 2. Citation-ready source cards
+### 3. Citation-ready source cards
 
 Return a small, consistent card for every page actually read:
 
@@ -82,7 +97,7 @@ Return a small, consistent card for every page actually read:
 
 Also add a `citationInstructions` field that tells the model to output a final `Sources` heading with Markdown links. The server cannot force a model’s prose, but making the citation data obvious improves compliance.
 
-### 3. Response-size modes
+### 4. Response-size modes
 
 Add a single `detail` setting rather than requiring callers to tune character counts:
 
@@ -95,7 +110,7 @@ Add a single `detail` setting rather than requiring callers to tune character co
 
 This keeps returned context predictable, especially for models running in 24 GB of unified memory.
 
-### 4. Better research handoff
+### 5. Better research handoff
 
 Expand `needs_research_handoff` so it is easy for Codex or Claude Code to ask the user the right question:
 
@@ -111,7 +126,7 @@ Expand `needs_research_handoff` so it is easy for Codex or Claude Code to ask th
 
 Important: the server should not secretly call an online model. That would require an external provider and would break the no-API design. Its job is to make a clean handoff to the user or harness.
 
-### 5. Primary-source ranking
+### 6. Primary-source ranking
 
 Add transparent, simple ranking signals before selecting results:
 
@@ -221,11 +236,12 @@ Validate `SEARCH_SITES`, page limits, and domain patterns at startup. Fail with 
 
 ### V2.0 — Research quality
 
-1. `research` tool.
-2. Detail modes.
-3. Source cards and consistent `references`.
-4. Improved research handoff.
-5. Tool-response schemas and tests.
+1. Automatic research decision rules in harness instructions.
+2. `research` tool.
+3. Detail modes.
+4. Source cards and consistent `references`.
+5. Improved research handoff.
+6. Tool-response schemas and tests.
 
 ### V2.1 — Better evidence
 
