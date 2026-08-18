@@ -19,6 +19,10 @@ function textResult(value: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] };
 }
 
+function references(results: SearchResult[]) {
+  return results.map((result) => ({ title: result.title, url: result.url, source: result.source }));
+}
+
 function handoff(query: string, attempts: SearchAttempt[]) {
   return {
     status: "needs_research_handoff",
@@ -43,31 +47,40 @@ async function runSearch(query: string, operation: () => Promise<unknown>) {
 
 server.registerTool("web_search", {
   title: "Search the web",
-  description: "Reads normal public search-result pages—never a search API. Each site is tried once; CAPTCHA or block failures return a handoff instead of retrying.",
+  description: "Reads normal public search-result pages—never a search API. Each site is tried once; CAPTCHA or block failures return a handoff instead of retrying. When relying on results, include the returned references in a Sources section beneath your answer.",
   inputSchema: baseSchema,
   annotations: { readOnlyHint: true, openWorldHint: true }
-}, (args) => runSearch(args.query, () => searchWeb(args)));
+}, (args) => runSearch(args.query, async () => {
+  const search = await searchWeb(args);
+  return { ...search, references: references(search.results) };
+}));
 
 server.registerTool("docs_search", {
   title: "Search documentation",
-  description: "Search likely official documentation using normal search-result pages. No search APIs or endless retries.",
+  description: "Search likely official documentation using normal search-result pages. No search APIs or endless retries. When relying on results, include the returned references in a Sources section beneath your answer.",
   inputSchema: { ...baseSchema, library: z.string().trim().min(1).max(100) },
   annotations: { readOnlyHint: true, openWorldHint: true }
-}, (args) => runSearch(args.query, () => searchDocs(args)));
+}, (args) => runSearch(args.query, async () => {
+  const search = await searchDocs(args);
+  return { ...search, references: references(search.results) };
+}));
 
 server.registerTool("web_fetch", {
   title: "Read one web page",
-  description: "Fetch one public HTML or plain-text URL and return cleaned text. Nothing is persisted.",
+  description: "Fetch one public HTML or plain-text URL and return cleaned text. Nothing is persisted. Cite the returned reference in a Sources section if you use this page in your answer.",
   inputSchema: { url: z.string().url(), maxCharacters: z.number().int().min(1_000).max(config.maxPageChars).default(config.maxPageChars) },
   annotations: { readOnlyHint: true, openWorldHint: true }
 }, async ({ url, maxCharacters }) => {
-  try { return textResult({ notice: UNTRUSTED_NOTICE, ...(await readWebPage(url, maxCharacters)) }); }
+  try {
+    const page = await readWebPage(url, maxCharacters);
+    return textResult({ notice: UNTRUSTED_NOTICE, ...page, references: [{ title: page.title, url: page.url, source: "web_fetch" }] });
+  }
   catch (error) { return { content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }], isError: true }; }
 });
 
 server.registerTool("read_urls", {
   title: "Read supplied research URLs",
-  description: "Read 1–5 public URLs supplied by the user or an online researcher. Pages are fetched one at a time and held only for this call.",
+  description: "Read 1–5 public URLs supplied by the user or an online researcher. Pages are fetched one at a time and held only for this call. Cite the returned references in a Sources section if you use them.",
   inputSchema: { urls: z.array(z.string().url()).min(1).max(5), maxCharactersPerPage: z.number().int().min(1_000).max(config.maxPageChars).default(6_000) },
   annotations: { readOnlyHint: true, openWorldHint: true }
 }, async ({ urls, maxCharactersPerPage }) => {
@@ -76,12 +89,13 @@ server.registerTool("read_urls", {
     try { pages.push({ url, page: await readWebPage(url, maxCharactersPerPage) }); }
     catch (error) { pages.push({ url, error: error instanceof Error ? error.message : String(error) }); }
   }
-  return textResult({ notice: UNTRUSTED_NOTICE, pages });
+  const usedReferences = pages.flatMap((item) => "page" in item ? [{ title: item.page.title, url: item.page.url, source: "user_supplied" }] : []);
+  return textResult({ notice: UNTRUSTED_NOTICE, pages, references: usedReferences });
 });
 
 server.registerTool("search_and_read", {
   title: "Search and read top sources",
-  description: "Search and then read the highest-ranked sources sequentially, keeping memory use small and saving nothing.",
+  description: "Search and then read the highest-ranked sources sequentially, keeping memory use small and saving nothing. Always include the returned references in a Sources section beneath an answer based on this research.",
   inputSchema: { ...baseSchema, maxPages: z.number().int().min(1).max(5).default(3), maxCharactersPerPage: z.number().int().min(1_000).max(config.maxPageChars).default(6_000) },
   annotations: { readOnlyHint: true, openWorldHint: true }
 }, async ({ query, maxResults, country, language, maxPages, maxCharactersPerPage }) => {
@@ -92,7 +106,8 @@ server.registerTool("search_and_read", {
       try { pages.push({ result, page: await readWebPage(result.url, maxCharactersPerPage) }); }
       catch (error) { pages.push({ result, error: error instanceof Error ? error.message : String(error) }); }
     }
-    return textResult({ notice: UNTRUSTED_NOTICE, ...search, pages });
+    const usedReferences = pages.flatMap((item) => "page" in item ? [{ title: item.page.title, url: item.page.url, source: item.result.source }] : []);
+    return textResult({ notice: UNTRUSTED_NOTICE, ...search, pages, references: usedReferences });
   } catch (error) {
     if (error instanceof SearchUnavailableError) return textResult(handoff(query, error.attempts));
     return { content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }], isError: true };

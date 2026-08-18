@@ -15,6 +15,8 @@ If all sites fail, the tool returns a `needs_research_handoff` response. Claude 
 
 The model can call `read_urls` to read and understand those links. The server itself never contacts an online model.
 
+Every search and page-reading tool also returns a compact `references` list (title, URL, and source). Tool descriptions instruct compatible models to display those links in a **Sources** section beneath research-based answers.
+
 ## Tools
 
 - `web_search` — searches normal result pages and returns ranked links/snippets.
